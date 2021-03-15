@@ -1,0 +1,256 @@
+#include <algorithm>
+#include <cassert>
+#include <cmath>
+#include <deque>
+#include <fstream>
+#include <iostream>
+#include <iterator>
+#include <numeric>
+#include <list>
+#include <map>
+#include <queue>
+#include <set>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
+using namespace std;
+
+template<typename T>
+class Polynomial {
+    vector<T> coefficients;
+
+public:
+    Polynomial(const vector<T>& coefs) {
+        auto begin = coefs.begin(), end = coefs.end();
+        if (begin != end) {
+            for (--end; *end == T(0) && end != begin; --end) {}
+            if (*end != T(0)) {
+                coefficients = vector<T>(begin, ++end);
+            }
+        }
+    }
+
+    Polynomial(const T& coef = T(0)) {
+        if (coef != T(0)) {
+            coefficients = {coef};
+        } else {
+            coefficients = {};
+        }
+    }
+
+    template<class Iterator>
+    Polynomial(Iterator begin, Iterator end) {
+        if (begin != end) {
+            for (--end; *end == T(0) && end != begin; --end) {}
+            if (*end != T(0)) {
+                coefficients = vector<T>(begin, ++end);
+            }
+        }
+    }
+
+    friend bool operator==(const Polynomial& self, const Polynomial& other) {
+        return self.coefficients == other.coefficients;
+    }
+
+    friend bool operator!=(const Polynomial& self, const Polynomial& other) {
+        return !(self == other);
+    }
+
+    friend Polynomial operator+(const Polynomial& self, const Polynomial& other) {
+        vector<T> result(max(self.coefficients.size(), other.coefficients.size()), T(0));
+        for (size_t i = 0; i < self.coefficients.size(); ++i) {
+            result[i] += self.coefficients.at(i);
+        }
+        for (size_t i = 0; i < other.coefficients.size(); ++i) {
+            result[i] += other.coefficients.at(i);
+        }
+        return Polynomial(result);
+    }
+
+    friend Polynomial& operator+=(Polynomial& self, const Polynomial& other) {
+        self = self + other;
+        return self;
+    }
+
+    friend Polynomial operator-(const Polynomial& self, const Polynomial& other) {
+        vector<T> result(max(self.coefficients.size(), other.coefficients.size()), T(0));
+        for (size_t i = 0; i < self.coefficients.size(); ++i) {
+            result[i] += self.coefficients.at(i);
+        }
+        for (size_t i = 0; i < other.coefficients.size(); ++i) {
+            result[i] -= other.coefficients.at(i);
+        }
+        return Polynomial(result);
+    }
+
+    friend Polynomial& operator-=(Polynomial& self, const Polynomial& other) {
+        self = self - other;
+        return self;
+    }
+
+    friend Polynomial operator*(const Polynomial& self, const Polynomial& other) {
+        if (self.coefficients.empty() || other.coefficients.empty()) {
+            return Polynomial();
+        } else {
+            vector<T> result(self.Degree() + other.Degree() + 1, T(0));
+            for (size_t i = 0; i < self.coefficients.size(); ++i) {
+                for (size_t j = 0; j < other.coefficients.size(); ++j) {
+                    result[i + j] += self.coefficients.at(i) * other.coefficients.at(j);
+                }
+            }
+            return Polynomial(result);
+        }
+    }
+
+    friend Polynomial& operator*=(Polynomial& self, const Polynomial& other) {
+        self = self * other;
+        return self;
+    }
+
+    [[nodiscard]] int Degree() const {
+        return static_cast<int>(coefficients.size()) - 1;
+    }
+
+    [[nodiscard]] auto begin() const {
+        return coefficients.cbegin();
+    }
+
+    [[nodiscard]] auto end() const {
+        return coefficients.cend();
+    }
+
+    T operator()(T x) const {
+        if (coefficients.empty()) {
+            return T(0);
+        } else {
+            T result = coefficients.at(coefficients.size() - 1);
+            for (size_t i = coefficients.size() - 1; i > 0; --i) {
+                result *= x;
+                result += coefficients.at(i - 1);
+            }
+            return result;
+        }
+    }
+
+    friend Polynomial operator&(const Polynomial& self, const Polynomial& other) {
+        if (self.coefficients.empty() || other.coefficients.empty()) {
+            return T(0);
+        }
+        Polynomial result = self.coefficients.at(self.coefficients.size() - 1);
+        for (size_t i = self.coefficients.size() - 1; i > 0; --i) {
+            result *= other;
+            result += self.coefficients.at(i - 1);
+        }
+        return result;
+    }
+
+    T operator[](size_t j) const {
+        if (j < coefficients.size()) {
+            return coefficients.at(j);
+        } else {
+            return T(0);
+        }
+    }
+
+    friend ostream& operator<<(ostream& out, const Polynomial<T>& self) {
+        if (self.Degree() != -1) {
+            for (int i = self.Degree(); i > 0; --i) {
+                auto& a = self.coefficients[i];
+                if (i == self.Degree()) {
+                    if (a == T(-1)) {
+                        out << '-';
+                    } else if (a != T(1)) {
+                        out << a << '*';
+                    }
+                } else {
+                    if (a == T(1)) {
+                        out << '+';
+                    } else if (a == T(-1)) {
+                        out << '-';
+                    } else if (a > T(0)) {
+                        out << '+' << a << '*';
+                    } else if (a < T(0)) {
+                        out << a << '*';
+                    } else {
+                        continue;
+                    }
+                }
+                if (i > 1) {
+                    cout << "x^" << i;
+                } else {
+                    cout << 'x';
+                }
+            }
+            if (self.coefficients[0] > T(0) && self.Degree() != 0) {
+                cout << '+';
+            }
+            if (self.coefficients[0] != T(0)) {
+                cout << self.coefficients[0];
+            }
+        } else {
+            out << T(0);
+        }
+        return out;
+    }
+
+    vector<T> norm() const {
+        vector<T> result = this->coefficients;
+        for (size_t i = 0; i < coefficients.size(); ++i) {
+            result[i] /= coefficients[coefficients.size() - 1];
+        }
+        return result;
+    }
+
+    friend pair<Polynomial, Polynomial> divide(const Polynomial& self, const Polynomial& other) {
+        vector<T> num = self.coefficients, den = other.coefficients;
+        vector<T> result(num.size() - den.size() + 1);
+        while (num.size() >= den.size()) {
+            T lambda = num[num.size() - 1] / den[den.size() - 1];
+            result[num.size() - den.size()] = lambda;
+            num.pop_back();
+            size_t num_size = num.size();
+            for (size_t i = den.size() - 1; i > 0; --i) {
+                size_t index = num_size - den.size() + i;
+                num[index] -= lambda * den[i - 1];
+                if (index == num.size() - 1 && num[index] == T(0)) {
+                    num.pop_back();
+                }
+            }
+        }
+        return {Polynomial(result), Polynomial(num)};
+    }
+
+    friend Polynomial operator/(const Polynomial& self, const Polynomial& other) {
+        if (other.Degree() == -1) {
+            throw invalid_argument("division by zero");
+        } else if (self.Degree() < other.Degree()) {
+            return Polynomial();
+        } else { return divide(self, other).first; }
+    }
+
+    friend Polynomial operator%(const Polynomial& self, const Polynomial& other) {
+        if (other.Degree() == -1) {
+            throw invalid_argument("division by zero");
+        } else if (self.Degree() < other.Degree()) {
+            return Polynomial();
+        } else { return divide(self, other).second; }
+    }
+
+    friend Polynomial operator,(const Polynomial& self, const Polynomial& other) {
+        Polynomial copy1 = self, copy2 = other;
+        while (!copy1.coefficients.empty() && !copy2.coefficients.empty()) {
+            copy1 = copy1 % copy2;
+            if (copy1.Degree() != -1) {
+                copy2 = copy2 % copy1;
+            }
+        }
+        Polynomial result = copy1 + copy2;
+        for (size_t i = 0; i < result.coefficients.size(); ++i) {
+            result.coefficients[i] /= result.coefficients[result.coefficients.size() - 1];
+        }
+        return result;
+    }
+};
